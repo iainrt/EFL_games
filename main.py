@@ -1,6 +1,7 @@
-def main():
-    print("Hello from efl-games!")
+import flet as ft
 
+def main(page: ft.Page):
+    page.title = "EFL Prediction Games"
+    page.add(ft.Text("Welcome to the EFL Games!"))
 
-if __name__ == "__main__":
-    main()
+ft.app(target=main)
