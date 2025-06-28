@@ -1,5 +1,8 @@
 import flet as ft
 from supabase_client import supabase
+from datetime import datetime, timezone
+
+user_id = "7b52ade0-b667-4b15-a15d-9665c851c9f2"
 
 def get_teams(league: str, season: str = "2025/2026"):
     response = supabase.table("teams")\
@@ -22,6 +25,12 @@ def efl_1_to_24s_view(page: ft.Page):
         expand=True,
     )
 
+    save_button = ft.ElevatedButton(
+        text="Save Prediction",
+        on_click=lambda e: save_prediction(),
+        icon=ft.Icons.SAVE
+    )    
+    
     def handle_reorder(e):
         item = team_list.pop(e.old_index)
         team_list.insert(e.new_index, item)
@@ -30,6 +39,27 @@ def efl_1_to_24s_view(page: ft.Page):
         list_view.controls.clear()
         for index, team in enumerate(team_list):
             list_view.controls.append(team_container(team, index + 1))
+        page.update()
+
+    def save_prediction():
+        league = tabs.tabs[tabs.selected_index].text.lower().replace(" ", "_")
+        season = "2025/2026"
+        rankings = [team["id"] for team in team_list]
+        now = datetime.now(timezone.utc).isoformat()
+
+        response = supabase.table("predictions").upsert({
+            "user_id": user_id,
+            "league": league,
+            "season": season,
+            "rankings": rankings,
+            "updated_at": now
+        }, on_conflict="user_id, league, season").execute()
+
+        if response.data:
+            page.snack_bar = ft.SnackBar(ft.Text("✅ Prediction saved!"))
+        else:
+            page.snack_bar = ft.SnackBar(ft.Text("❌ Failed to save prediction."))
+        page.snack_bar.open = True
         page.update()
 
     def team_container(team, position):
@@ -51,8 +81,6 @@ def efl_1_to_24s_view(page: ft.Page):
             expand=False,       # 👈 prevent full-width stretch
             width=350           # 👈 optional: limit width to pull handle in
         )
-
-    
 
     def load_teams(league):
         list_view.controls.clear()
@@ -81,6 +109,7 @@ def efl_1_to_24s_view(page: ft.Page):
             ft.Text("Predict the finishing order", size=24, weight=ft.FontWeight.BOLD),
             tabs,
             ft.Container(content=list_view, padding=10, expand=True),
+            save_button
         ])
     )
 
