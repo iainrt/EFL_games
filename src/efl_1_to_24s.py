@@ -83,12 +83,46 @@ def efl_1_to_24s_view(page: ft.Page):
         )
 
     def load_teams(league):
-        list_view.controls.clear()
         nonlocal team_list
-        team_list = get_teams(league)
-        for index, team in enumerate(team_list):
-            list_view.controls.append(team_container(team, index + 1))
+        season = "2025/2026"
+
+        # Try to fetch saved prediction
+        prediction_res = supabase.table("predictions")\
+            .select("rankings")\
+            .eq("user_id", user_id)\
+            .eq("league", league)\
+            .eq("season", season)\
+            .maybe_single()\
+            .execute()
+
+        if prediction_res.data and prediction_res.data["rankings"]:
+            saved_order_ids = prediction_res.data["rankings"]
+
+            # Fetch full team info for those IDs (keep order)
+            team_list = []
+            for team_id in saved_order_ids:
+                res = supabase.table("teams")\
+                    .select("*")\
+                    .eq("id", team_id)\
+                    .maybe_single()\
+                    .execute()
+                if res.data:
+                    team_list.append(res.data)
+        else:
+            # No saved prediction — load default team order
+            team_list = supabase.table("teams")\
+                .select("*")\
+                .eq("league", league)\
+                .eq("season", season)\
+                .order("sort_order")\
+                .execute().data
+
+        # Rebuild list view
+        list_view.controls.clear()
+        for i, team in enumerate(team_list):
+            list_view.controls.append(team_container(team, i + 1))
         page.update()
+
 
     def on_tab_change(e):
         selected_league = e.control.tabs[e.control.selected_index].text.lower().replace(" ", "_")
