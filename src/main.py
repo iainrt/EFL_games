@@ -1,5 +1,5 @@
 import flet as ft
-from auth_view import auth_view
+from auth_view import auth_view, try_auto_login
 from efl_1_to_24s import efl_1_to_24s_view
 
 def main(page: ft.Page):
@@ -15,6 +15,10 @@ def main(page: ft.Page):
     def efl_1_to_24s_entry(user_id):
         page.clean()
         efl_1_to_24s_view(page, user_id=user_id)
+
+    # 🔁 Try auto-login and enter app immediately
+    if try_auto_login(efl_1_to_24s_entry):
+        return
 
     games = [
         {"title": "EFL 1 to 24s", "launch": launch_efl_1_to_24s, "coming_soon": False},
