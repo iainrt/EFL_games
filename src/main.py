@@ -1,4 +1,6 @@
 import flet as ft
+from auth_view import auth_view
+from efl_1_to_24s import efl_1_to_24s_view
 
 def main(page: ft.Page):
     page.title = "EFL Prediction Games"
@@ -6,11 +8,19 @@ def main(page: ft.Page):
     page.scroll = "auto"
     page.theme_mode = ft.ThemeMode.LIGHT
 
+    def launch_efl_1_to_24s():
+        page.clean()
+        auth_view(page, on_login_success=efl_1_to_24s_entry)
+
+    def efl_1_to_24s_entry(user_id):
+        page.clean()
+        efl_1_to_24s_view(page, user_id=user_id)
+
     games = [
-        {"title": "EFL 1 to 24s", "file": "efl_1_to_24s.py"},
-        {"title": "Last Man Standing", "file": "last_man_standing.py"},
-        {"title": "Season Prediction", "file": "season_prediction.py"},
-        {"title": "Snakes and Ladders", "file": "snakes_and_ladders.py"},
+        {"title": "EFL 1 to 24s", "launch": launch_efl_1_to_24s, "coming_soon": False},
+        {"title": "Last Man Standing", "coming_soon": True},
+        {"title": "Season Prediction", "coming_soon": True},
+        {"title": "Snakes and Ladders", "coming_soon": True},
     ]
 
     tiles = []
@@ -21,8 +31,12 @@ def main(page: ft.Page):
                     content=ft.Column(
                         [
                             ft.Text(game["title"], size=20, weight=ft.FontWeight.BOLD),
-                            ft.Text("COMING SOON", italic=True, color=ft.Colors.GREY),
-                            ft.ElevatedButton("View", disabled=True),  # Future navigation
+                            ft.Text("COMING SOON" if game.get("coming_soon") else "", italic=True, color=ft.Colors.GREY),
+                            ft.ElevatedButton(
+                                "View",
+                                on_click=lambda e, f=game.get("launch"): f() if f else None,
+                                disabled=game.get("coming_soon", True)
+                            ),
                         ],
                         spacing=10,
                     ),

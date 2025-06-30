@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import time
 import asyncio
 
-user_id = "7b52ade0-b667-4b15-a15d-9665c851c9f2"
+#user_id = "7b52ade0-b667-4b15-a15d-9665c851c9f2"
 
 def get_teams(league: str, season: str = "2025/2026"):
     response = supabase.table("teams")\
@@ -15,7 +15,7 @@ def get_teams(league: str, season: str = "2025/2026"):
         .execute()
     return response.data
 
-def efl_1_to_24s_view(page: ft.Page):
+def efl_1_to_24s_view(page: ft.Page, user_id: str):
     page.title = "EFL 1 to 24s"
     page.scroll = "auto"
     page.padding = 20
@@ -181,4 +181,4 @@ def efl_1_to_24s_view(page: ft.Page):
     # Initial load
     load_teams("championship")
 
-ft.app(target=efl_1_to_24s_view)
+#ft.app(target=efl_1_to_24s_view)
