@@ -1,12 +1,18 @@
 import flet as ft
 from auth_view import auth_view, try_auto_login
 from efl_1_to_24s import efl_1_to_24s_view
+import asyncio
 
 def main(page: ft.Page):
+    page.clean()
     page.title = "EFL Prediction Games"
     page.padding = 30
     page.scroll = "auto"
     page.theme_mode = ft.ThemeMode.LIGHT
+
+    def go_home():
+        page.clean()
+        main(page)
 
     def launch_efl_1_to_24s():
         page.clean()
@@ -14,7 +20,8 @@ def main(page: ft.Page):
 
     def efl_1_to_24s_entry(user_id):
         page.clean()
-        efl_1_to_24s_view(page, user_id=user_id)
+        start_view = efl_1_to_24s_view(page, user_id=user_id, on_logout=go_home)
+        start_view()
 
     # 🔁 Try auto-login and enter app immediately
     if try_auto_login(efl_1_to_24s_entry):
@@ -63,4 +70,4 @@ def main(page: ft.Page):
         )
     )
 
-ft.app(target=main)
+ft.app(target=main, view=ft.WEB_BROWSER)

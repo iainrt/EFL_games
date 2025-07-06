@@ -167,3 +167,5 @@ __pycache__/
 .venv/
 .uv/
 *.pyc
+
+.session.json
