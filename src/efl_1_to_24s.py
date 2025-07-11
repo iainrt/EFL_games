@@ -18,7 +18,7 @@ def get_teams(league: str, season: str = "2025/2026"):
     return response.data
 
 def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
-    print(f"🔐 Entered efl_1_to_24s_view for user: {user_id}")
+    #print(f"🔐 Entered efl_1_to_24s_view for user: {user_id}")
     page.title = "EFL 1 to 24s"
     page.scroll = "auto"
     page.padding = 20
@@ -39,7 +39,7 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
     )
 
     async def update_countdown():
-        print("⏳ Countdown started")
+        #print("⏳ Countdown started")
 
         while True:
             now = datetime.now(timezone.utc)
@@ -246,7 +246,7 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
     )
 
     def start_view():
-        print("🚀 Init started")
+        #print("🚀 Init started")
         load_teams("championship")
         page.run_task(update_countdown)
 
