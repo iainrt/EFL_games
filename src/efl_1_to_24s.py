@@ -5,6 +5,7 @@ import time
 import asyncio
 from pathlib import Path
 from constants import deadline
+import json
 
 #user_id = "7b52ade0-b667-4b15-a15d-9665c851c9f2"
 
@@ -22,6 +23,12 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
     page.title = "EFL 1 to 24s"
     page.scroll = "auto"
     page.padding = 20
+
+    def apply_saved_token():
+        session_file = Path(".session.json")
+        if session_file.exists():
+            saved = json.loads(session_file.read_text())
+            supabase.postgrest.auth(saved["access_token"])
 
     team_list = []  # Stores team data in current order
     last_saved_ids = []  # store saved order of team UUIDs
@@ -65,6 +72,16 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
         rankings = [team["id"] for team in team_list]
         now = datetime.now(timezone.utc)
 
+        # 🔐 Ensure PostgREST has the correct token
+        apply_saved_token()
+
+        session_file = Path(".session.json")
+        if session_file.exists():
+            saved = json.loads(session_file.read_text())
+            access_token = saved["access_token"]
+            supabase.postgrest.auth(access_token)
+
+
         # ✅ Block saving if deadline passed
         if now > deadline:
             page.snack_bar = ft.SnackBar(ft.Text("❌ Deadline passed – predictions locked!"))
@@ -73,6 +90,11 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
             return
 
         # ⏱️ Allow save before deadline
+        supabase.postgrest.auth(access_token)
+        print("🔐 user_id being used for upsert:", user_id)
+        print("🔒 supabase.auth.get_user():", supabase.auth.get_user())
+
+
         response = supabase.table("predictions").upsert({
             "user_id": user_id,
             "league": league,
@@ -151,11 +173,28 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
 
     def load_teams(league):
         nonlocal team_list
+
+        # 🔐 Ensure PostgREST has the correct token
+        apply_saved_token()
+
         season = "2025/2026"
         league = league.lower().replace(" ", "_")
 
+        # Ensure PostgREST auth is set
+        session_file = Path(".session.json")
+        if session_file.exists():
+            saved = json.loads(session_file.read_text())
+            supabase.postgrest.auth(saved["access_token"])
+
+
         #print(f"Loading teams for: {league}")
         # Try to fetch saved prediction
+
+        print("📥 Fetching predictions for:", user_id, league, season)
+        print("🔍 SELECT user_id:", user_id)
+        print("🔍 Current PostgREST token:", supabase.postgrest.headers.get("Authorization"))
+
+
         prediction_res = supabase.table("predictions")\
             .select("rankings")\
             .eq("user_id", user_id)\
@@ -163,7 +202,9 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
             .eq("season", season)\
             .execute()
         
-        #print("🟩 Prediction result:", prediction_res.data)
+        print("🟩 Prediction result:", prediction_res.data)
+
+        print("🔐 PostgREST token:", supabase.postgrest.headers.get("Authorization"))
 
         records = prediction_res.data
         if records and records[0]["rankings"]:

@@ -16,12 +16,28 @@ def try_auto_login(on_success):
     if session_file.exists():
         try:
             saved = json.loads(session_file.read_text())
+
+            # Restore session from saved tokens
             res = supabase.auth.set_session(saved["access_token"], saved["refresh_token"])
-            user_id = res.user.id
-            on_success(user_id)
-            return True
-        except Exception:
-            session_file.unlink(missing_ok=True)  # invalid session, delete
+
+            if res.user and res.session:
+                user_id = res.user.id
+                access_token = res.session.access_token
+
+                print("✅ Auto-login: User ID:", user_id)
+                print("✅ Auto-login: Access token applied:", access_token[:40])
+
+                # ✅ Authorize PostgREST client for RLS to work
+                supabase.postgrest.auth(access_token)
+
+                on_success(user_id)
+                return True
+            else:
+                print("❌ Session or user missing")
+                session_file.unlink(missing_ok=True)
+        except Exception as ex:
+            print("❌ Auto-login error:", ex)
+            session_file.unlink(missing_ok=True)
     return False
 
 def auth_view(page: ft.Page, on_login_success):
@@ -36,6 +52,9 @@ def auth_view(page: ft.Page, on_login_success):
                 "password": password_input.value
             })
             user_id = res.user.id
+
+            # ✅ Ensure authenticated requests work
+            supabase.postgrest.auth(res.session.access_token)
 
             # Save session to disk
             session_file = Path(".session.json")
@@ -58,6 +77,14 @@ def auth_view(page: ft.Page, on_login_success):
                 "email": email_input.value,
                 "password": password_input.value
             })
+
+            # Save session to disk
+            session_file = Path(".session.json")
+            session_file.write_text(res.session.model_dump_json())
+
+            # ✅ Set postgrest auth token for RLS to work
+            supabase.postgrest.auth(res.session.access_token)
+            
             status_text.value = "✅ Signup successful! Please log in."
             status_text.color = ft.Colors.GREEN
             page.update()
