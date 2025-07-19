@@ -165,9 +165,9 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
         season = "2025/2026"
         league = league.lower().replace(" ", "_")
 
-        print("📥 Fetching predictions for:", user_id, league, season)
-        print("🔍 SELECT user_id:", user_id)
-        print("🔍 Current PostgREST token:", supabase.postgrest.headers.get("Authorization"))
+        #print("📥 Fetching predictions for:", user_id, league, season)
+        #print("🔍 SELECT user_id:", user_id)
+        #print("🔍 Current PostgREST token:", supabase.postgrest.headers.get("Authorization"))
 
         prediction_query = supabase.table("predictions")\
             .select("rankings")\

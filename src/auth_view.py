@@ -1,9 +1,11 @@
 import flet as ft
 from supabase import create_client, Client
+from supabase_client import supabase
 import os
 from dotenv import load_dotenv
 from pathlib import Path
 from auth_helpers import save_session_and_auth, clear_session
+import json
 
 load_dotenv()
 
