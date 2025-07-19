@@ -12,13 +12,14 @@ from supabase_helpers import safe_execute
 #user_id = "7b52ade0-b667-4b15-a15d-9665c851c9f2"
 
 def get_teams(league: str, season: str = "2025/2026"):
-    response = supabase.table("teams")\
+    query = supabase.table("teams")\
         .select("*")\
         .eq("league", league)\
         .eq("season", season)\
         .order("sort_order")\
-        .execute()
-    return response.data
+        
+    res = safe_execute(query, f"get_teams for {league} {season}")
+    return res.data if res else []
 
 def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
     #print(f"🔐 Entered efl_1_to_24s_view for user: {user_id}")
@@ -78,15 +79,18 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
             page.update()
             return
 
-        response = supabase.table("predictions").upsert({
+        # 🔄 Build query and execute safely
+        query = supabase.table("predictions").upsert({
             "user_id": user_id,
             "league": league,
             "season": season,
             "rankings": rankings,
             "updated_at": now.isoformat()
-        }, on_conflict="user_id,league,season").execute()
+        }, on_conflict="user_id,league,season")
 
-        if response.data:
+        response = safe_execute(query, f"save_prediction for {league} by user {user_id}")
+
+        if response and response.data:
             page.snack_bar = ft.SnackBar(ft.Text("✅ Prediction saved!"))
             last_saved_ids.clear()
             last_saved_ids.extend(rankings)
@@ -101,7 +105,6 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
             page.snack_bar = ft.SnackBar(ft.Text("❌ Failed to save prediction."))
             page.snack_bar.open = True
             page.update()
-
 
     save_button = ft.ElevatedButton(
         text="Save Prediction",
@@ -157,65 +160,51 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
     def load_teams(league):
         nonlocal team_list
 
-        # 🔐 Ensure PostgREST has the correct token
         apply_saved_token()
 
         season = "2025/2026"
         league = league.lower().replace(" ", "_")
 
-        #print(f"Loading teams for: {league}")
-        # Try to fetch saved prediction
-
         print("📥 Fetching predictions for:", user_id, league, season)
         print("🔍 SELECT user_id:", user_id)
         print("🔍 Current PostgREST token:", supabase.postgrest.headers.get("Authorization"))
 
-
-        prediction_res = supabase.table("predictions")\
+        prediction_query = supabase.table("predictions")\
             .select("rankings")\
             .eq("user_id", user_id)\
             .eq("league", league)\
-            .eq("season", season)\
-            .execute()
-        
-        print("🟩 Prediction result:", prediction_res.data)
+            .eq("season", season)
 
-        print("🔐 PostgREST token:", supabase.postgrest.headers.get("Authorization"))
+        prediction_res = safe_execute(prediction_query, f"load_teams prediction SELECT for {user_id}, {league}")
+        records = prediction_res.data if prediction_res else None
 
-        records = prediction_res.data
         if records and records[0]["rankings"]:
-            #print("✅ Loading saved prediction order")
             saved_order_ids = records[0]["rankings"]
-
-            # Fetch full team info for those IDs (keep order)
             team_list = []
+
             for team_id in saved_order_ids:
-                res = supabase.table("teams")\
+                team_query = supabase.table("teams")\
                     .select("*")\
                     .eq("id", team_id)\
-                    .maybe_single()\
-                    .execute()
-                if res.data:
+                    .maybe_single()
+                res = safe_execute(team_query, f"load_teams fetch team {team_id}")
+                if res and res.data:
                     team_list.append(res.data)
         else:
-            # No saved prediction — load default team order
-            #print("📄 No saved prediction, loading default order")
-            team_list = supabase.table("teams")\
+            fallback_query = supabase.table("teams")\
                 .select("*")\
                 .eq("league", league)\
                 .eq("season", season)\
-                .order("sort_order")\
-                .execute().data
+                .order("sort_order")
+            fallback_res = safe_execute(fallback_query, f"load_teams fallback for {league}")
+            team_list = fallback_res.data if fallback_res else []
 
-        # Rebuild list view
         list_view.controls.clear()
         for i, team in enumerate(team_list):
             list_view.controls.append(team_container(team, i + 1))
-        
-        #print("📦 List view built with", len(list_view.controls), "teams")
+
         page.update()
 
-        # Save the current state of team IDs as the last saved
         last_saved_ids.clear()
         last_saved_ids.extend([team["id"] for team in team_list])
 
