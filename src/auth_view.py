@@ -2,8 +2,8 @@ import flet as ft
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
-import json
 from pathlib import Path
+from auth_helpers import save_session_and_auth, clear_session
 
 load_dotenv()
 
@@ -17,27 +17,23 @@ def try_auto_login(on_success):
         try:
             saved = json.loads(session_file.read_text())
 
-            # Restore session from saved tokens
             res = supabase.auth.set_session(saved["access_token"], saved["refresh_token"])
 
             if res.user and res.session:
                 user_id = res.user.id
-                access_token = res.session.access_token
+                save_session_and_auth(res.session)
 
                 print("✅ Auto-login: User ID:", user_id)
-                print("✅ Auto-login: Access token applied:", access_token[:40])
-
-                # ✅ Authorize PostgREST client for RLS to work
-                supabase.postgrest.auth(access_token)
+                print("✅ Auto-login: Access token applied:", res.session.access_token[:40])
 
                 on_success(user_id)
                 return True
             else:
                 print("❌ Session or user missing")
-                session_file.unlink(missing_ok=True)
+                clear_session()
         except Exception as ex:
             print("❌ Auto-login error:", ex)
-            session_file.unlink(missing_ok=True)
+            clear_session()
     return False
 
 def auth_view(page: ft.Page, on_login_success):
@@ -51,20 +47,14 @@ def auth_view(page: ft.Page, on_login_success):
                 "email": email_input.value,
                 "password": password_input.value
             })
-            user_id = res.user.id
 
-            # ✅ Ensure authenticated requests work
-            supabase.postgrest.auth(res.session.access_token)
-
-            # Save session to disk
-            session_file = Path(".session.json")
-            session_file.write_text(res.session.model_dump_json())
+            save_session_and_auth(res.session)
 
             status_text.value = "✅ Login successful!"
             status_text.color = ft.Colors.GREEN
             page.update()
 
-            on_login_success(user_id)
+            on_login_success(res.user.id)
 
         except Exception as ex:
             status_text.value = f"❌ Login failed: {ex}"
@@ -78,16 +68,12 @@ def auth_view(page: ft.Page, on_login_success):
                 "password": password_input.value
             })
 
-            # Save session to disk
-            session_file = Path(".session.json")
-            session_file.write_text(res.session.model_dump_json())
+            save_session_and_auth(res.session)
 
-            # ✅ Set postgrest auth token for RLS to work
-            supabase.postgrest.auth(res.session.access_token)
-            
             status_text.value = "✅ Signup successful! Please log in."
             status_text.color = ft.Colors.GREEN
             page.update()
+
         except Exception as ex:
             status_text.value = f"❌ Signup failed: {ex}"
             status_text.color = ft.Colors.RED
