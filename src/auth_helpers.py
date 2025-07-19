@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from supabase_client import supabase
+import traceback
 
 def apply_saved_token() -> str | None:
     """
@@ -35,4 +36,20 @@ def save_session_and_auth(session):
 
 def clear_session():
     Path(".session.json").unlink(missing_ok=True)
+
+def safe_sign_in(email: str, password: str):
+    try:
+        return supabase.auth.sign_in_with_password({"email": email, "password": password})
+    except Exception as ex:
+        print("❌ Sign-in failed:")
+        traceback.print_exc()
+        return None
+
+def safe_sign_up(email: str, password: str):
+    try:
+        return supabase.auth.sign_up({"email": email, "password": password})
+    except Exception as ex:
+        print("❌ Sign-up failed:")
+        traceback.print_exc()
+        return None
 

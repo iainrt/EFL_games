@@ -4,7 +4,7 @@ from supabase_client import supabase
 import os
 from dotenv import load_dotenv
 from pathlib import Path
-from auth_helpers import save_session_and_auth, clear_session
+from auth_helpers import save_session_and_auth, clear_session, safe_sign_in, safe_sign_up
 import json
 
 load_dotenv()
@@ -44,42 +44,29 @@ def auth_view(page: ft.Page, on_login_success):
     status_text = ft.Text("", color=ft.Colors.RED)
 
     def do_login(e):
-        try:
-            res = supabase.auth.sign_in_with_password({
-                "email": email_input.value,
-                "password": password_input.value
-            })
-
+        res = safe_sign_in(email_input.value, password_input.value)
+        if res and res.session and res.user:
             save_session_and_auth(res.session)
-
             status_text.value = "✅ Login successful!"
             status_text.color = ft.Colors.GREEN
             page.update()
-
             on_login_success(res.user.id)
-
-        except Exception as ex:
-            status_text.value = f"❌ Login failed: {ex}"
+        else:
+            status_text.value = "❌ Login failed. Check credentials or try again."
             status_text.color = ft.Colors.RED
             page.update()
 
     def do_signup(e):
-        try:
-            res = supabase.auth.sign_up({
-                "email": email_input.value,
-                "password": password_input.value
-            })
-
+        res = safe_sign_up(email_input.value, password_input.value)
+        if res and res.session:
             save_session_and_auth(res.session)
-
             status_text.value = "✅ Signup successful! Please log in."
             status_text.color = ft.Colors.GREEN
-            page.update()
-
-        except Exception as ex:
-            status_text.value = f"❌ Signup failed: {ex}"
+        else:
+            status_text.value = "❌ Signup failed. Email may be in use."
             status_text.color = ft.Colors.RED
-            page.update()
+        page.update()
+
 
     page.add(
         ft.Column([
