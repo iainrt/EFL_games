@@ -1,73 +1,177 @@
 import flet as ft
-from auth_view import auth_view, try_auto_login
+from auth_helpers import try_auto_login, logout_user
+from auth_view import auth_view
 from efl_1_to_24s import efl_1_to_24s_view
-import asyncio
+
 
 def main(page: ft.Page):
-    page.clean()
     page.title = "EFL Prediction Games"
     page.padding = 30
     page.scroll = "auto"
     page.theme_mode = ft.ThemeMode.LIGHT
 
-    def go_home():
-        page.clean()
-        main(page)
+    # Store user_id in session
+    page.session.set("user_id", None)
 
-    def launch_efl_1_to_24s():
-        page.clean()
-        auth_view(page, on_login_success=efl_1_to_24s_entry)
+    # --- AppBar Navigation ---
+    def build_appbar():
+        """Build dynamic navigation bar inside an AppBar with Material buttons."""
+        user_id = page.session.get("user_id")
 
-    def efl_1_to_24s_entry(user_id):
-        page.clean()
-        start_view = efl_1_to_24s_view(page, user_id=user_id, on_logout=go_home)
-        start_view()
+        actions = [ft.ElevatedButton("Home", on_click=lambda e: page.go("/"))]
 
-    # 🔁 Try auto-login and enter app immediately
-    if try_auto_login(efl_1_to_24s_entry):
-        return
+        if user_id:
+            actions.append(ft.ElevatedButton("1to24s", on_click=lambda e: page.go("/1to24s")))
+            actions.append(ft.ElevatedButton("Logout", on_click=lambda e: handle_logout()))
+        else:
+            actions.append(ft.ElevatedButton("Login", on_click=lambda e: page.go("/login")))
 
-    games = [
-        {"title": "EFL 1 to 24s", "launch": launch_efl_1_to_24s, "coming_soon": False},
-        {"title": "Last Man Standing", "coming_soon": True},
-        {"title": "Season Prediction", "coming_soon": True},
-        {"title": "Snakes and Ladders", "coming_soon": True},
-    ]
+        return ft.AppBar(
+            title=ft.Text("EFL Prediction Games", size=20, weight=ft.FontWeight.BOLD),
+            center_title=False,
+            bgcolor=ft.Colors.BLUE_100,
+            actions=actions,
+        )
 
-    tiles = []
-    for game in games:
-        tiles.append(
-            ft.Card(
-                content=ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(game["title"], size=20, weight=ft.FontWeight.BOLD),
-                            ft.Text("COMING SOON" if game.get("coming_soon") else "", italic=True, color=ft.Colors.GREY),
-                            ft.ElevatedButton(
-                                "View",
-                                on_click=lambda e, f=game.get("launch"): f() if f else None,
-                                disabled=game.get("coming_soon", True)
+    def handle_logout():
+        logout_user()
+        page.session.set("user_id", None)
+        page.go("/")
+
+    # --- Routing ---
+    def route_change(e: ft.RouteChangeEvent):
+        page.views.clear()
+
+        if page.route == "/":
+            # Home page
+            games = [
+                {"title": "EFL 1 to 24s", "route": "/login", "coming_soon": False},
+                {"title": "Last Man Standing", "coming_soon": True},
+                {"title": "Season Prediction", "coming_soon": True},
+                {"title": "Snakes and Ladders", "coming_soon": True},
+            ]
+
+            tiles = []
+            for game in games:
+                tiles.append(
+                    ft.Card(
+                        content=ft.Container(
+                            content=ft.Column(
+                                [
+                                    ft.Text(game["title"], size=20, weight=ft.FontWeight.BOLD),
+                                    ft.Text(
+                                        "COMING SOON" if game.get("coming_soon") else "",
+                                        italic=True,
+                                        color=ft.Colors.GREY,
+                                    ),
+                                    ft.ElevatedButton(
+                                        "View",
+                                        on_click=lambda _, r=game.get("route"): page.go(r) if r else None,
+                                        disabled=game.get("coming_soon", True),
+                                    ),
+                                ],
+                                spacing=10,
+                                alignment=ft.MainAxisAlignment.CENTER,
                             ),
-                        ],
-                        spacing=10,
-                    ),
-                    padding=20,
-                    width=300,
-                ),
-                elevation=4,
+                            padding=20,
+                            width=250,
+                        ),
+                        elevation=4,
+                    )
+                )
+
+            page.views.append(
+                ft.View(
+                    "/",
+                    controls=[
+                        ft.Container(
+                            content=ft.Card(
+                                content=ft.Container(
+                                    content=ft.Column(
+                                        [
+                                            ft.Text("Choose a game mode below", size=18, weight=ft.FontWeight.BOLD),
+                                            ft.ResponsiveRow(tiles, alignment=ft.MainAxisAlignment.CENTER),
+                                        ],
+                                        spacing=20,
+                                        alignment=ft.MainAxisAlignment.CENTER,
+                                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                    ),
+                                    padding=30,
+                                    expand=True,
+                                ),
+                                elevation=8,
+                            ),
+                            alignment=ft.alignment.center,
+                            expand=True,
+                        )
+                    ],
+                    appbar=build_appbar(),
+                )
             )
-        )
 
-    page.add(
-        ft.Column(
-            [
-                ft.Text("EFL Prediction Games", size=30, weight=ft.FontWeight.BOLD),
-                ft.Text("Choose a game mode below", size=16),
-                ft.ResponsiveRow(tiles, alignment=ft.MainAxisAlignment.CENTER),
-            ],
-            spacing=20,
-            alignment=ft.MainAxisAlignment.CENTER,
-        )
-    )
+        elif page.route == "/login":
+            # Login page
+            def on_login_success(user_id):
+                page.session.set("user_id", user_id)
+                page.go("/1to24s")
 
-ft.app(target=main, view=ft.WEB_BROWSER)
+            page.views.append(
+                ft.View(
+                    "/login",
+                    controls=[
+                        ft.Container(
+                            content=ft.Card(
+                                content=ft.Container(
+                                    content=auth_view(page, on_login_success=on_login_success),
+                                    padding=30,
+                                ),
+                                elevation=8,
+                            ),
+                            alignment=ft.alignment.center,
+                            expand=True,
+                        )
+                    ],
+                    appbar=build_appbar(),
+                )
+            )
+
+        elif page.route == "/1to24s":
+            # Protect route
+            user_id = page.session.get("user_id")
+            if not user_id:
+                page.go("/login")
+                return
+
+            # ✅ Get game UI container from efl_1_to_24s_view()
+            content = efl_1_to_24s_view(page, user_id=user_id, on_logout=handle_logout)
+
+            page.views.append(
+                ft.View(
+                    "/1to24s",
+                    controls=[
+                        ft.Container(
+                            content=ft.Card(
+                                content=ft.Container(content=content, padding=20),
+                                elevation=8,
+                            ),
+                            alignment=ft.alignment.center,
+                            expand=True,
+                        )
+                    ],
+                    appbar=build_appbar(),
+                )
+            )
+
+        page.update()
+
+    page.on_route_change = route_change
+
+    # Auto-login redirect
+    if try_auto_login(lambda user_id: page.session.set("user_id", user_id)):
+        page.go("/1to24s")
+
+    # Start at current route
+    page.go(page.route)
+
+
+ft.app(target=main, view=ft.WEB_BROWSER, route_url_strategy="hash")
