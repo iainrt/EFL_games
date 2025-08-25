@@ -1,5 +1,6 @@
 import flet as ft
 from auth_helpers import save_session_and_auth, safe_sign_in, safe_sign_up
+from supabase_client import supabase
 
 
 def auth_view(page: ft.Page, on_login_success):
@@ -33,7 +34,25 @@ def auth_view(page: ft.Page, on_login_success):
             status_text.color = ft.Colors.RED
         page.update()
 
-    # ✅ Wrap in a Card to match Home game tiles
+    def do_forgot_password(e):
+        if not email_input.value:
+            status_text.value = "⚠️ Please enter your email first."
+            status_text.color = ft.Colors.RED
+            page.update()
+            return
+
+        try:
+            supabase.auth.reset_password_for_email(email_input.value)
+            status_text.value = (
+                f"📩 Password reset link sent to {email_input.value}. "
+                "Check your email."
+            )
+            status_text.color = ft.Colors.GREEN
+        except Exception as ex:
+            status_text.value = f"❌ Failed to send reset link: {ex}"
+            status_text.color = ft.Colors.RED
+        page.update()
+
     return ft.Row(
         [
             ft.Card(
@@ -54,6 +73,11 @@ def auth_view(page: ft.Page, on_login_success):
                                     ft.TextButton("Sign Up", on_click=do_signup),
                                 ],
                                 alignment=ft.MainAxisAlignment.CENTER,
+                            ),
+                            ft.TextButton(
+                                "Forgot Password?",
+                                on_click=do_forgot_password,
+                                style=ft.ButtonStyle(color=ft.Colors.BLUE),
                             ),
                             status_text,
                         ],
