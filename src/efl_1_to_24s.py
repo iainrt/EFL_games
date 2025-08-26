@@ -1,9 +1,10 @@
 import flet as ft
 from supabase_client import supabase
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import asyncio
 from pathlib import Path
 from constants import deadline
+import json
 from auth_helpers import apply_saved_token
 from supabase_helpers import safe_execute
 
@@ -16,17 +17,23 @@ def get_teams(league: str, season: str = "2025/2026"):
         .eq("season", season)
         .order("sort_order")
     )
+
     res = safe_execute(query, f"get_teams for {league} {season}")
     return res.data if res else []
 
 
 def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
-    """Return the full game UI as a container instead of adding directly to page."""
+    page.title = "EFL 1 to 24s"
+    page.scroll = "auto"
+    page.padding = 20
 
     team_list = []  # Stores team data in current order
-    last_saved_ids = []  # Store saved order of team UUIDs
+    last_saved_ids = []  # store saved order of team UUIDs
 
-    list_view = ft.ReorderableListView(expand=True)
+    list_view = ft.ReorderableListView(
+        on_reorder=lambda e: handle_reorder(e),
+        expand=True,
+    )
 
     countdown_text = ft.Text(
         value="⏳ Deadline in: ...",
@@ -35,15 +42,6 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
         color=ft.Colors.RED,
     )
 
-    save_status_icon = ft.Icon(
-        name=ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, visible=False
-    )
-
-    save_button = ft.ElevatedButton(
-        text="Save Prediction", icon=ft.Icons.SAVE, disabled=True
-    )
-
-    # --- Inner helpers ---
     async def update_countdown():
         while True:
             now = datetime.now(timezone.utc)
@@ -59,7 +57,9 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
             days, remainder = divmod(total_seconds, 86400)
             hours, remainder = divmod(remainder, 3600)
             minutes, seconds = divmod(remainder, 60)
-            countdown_text.value = f"⏳ Time left: {days}d {hours:02}h {minutes:02}m {seconds:02}s"
+            countdown_text.value = (
+                f"⏳ Time left: {days}d {hours:02}h {minutes:02}m {seconds:02}s"
+            )
             page.update()
             await asyncio.sleep(1)
 
@@ -69,8 +69,10 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
         rankings = [team["id"] for team in team_list]
         now = datetime.now(timezone.utc)
 
+        # 🔐 Ensure PostgREST has the correct token
         apply_saved_token()
 
+        # ✅ Block saving if deadline passed
         if now > deadline:
             page.snack_bar = ft.SnackBar(
                 ft.Text("❌ Deadline passed – predictions locked!")
@@ -89,7 +91,8 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
             },
             on_conflict="user_id,league,season",
         )
-        response = safe_execute(query, f"save_prediction for {league} by {user_id}")
+
+        response = safe_execute(query, f"save_prediction for {league} by user {user_id}")
 
         if response and response.data:
             page.snack_bar = ft.SnackBar(ft.Text("✅ Prediction saved!"))
@@ -107,7 +110,13 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
             page.snack_bar.open = True
             page.update()
 
-    save_button.on_click = save_prediction
+    save_button = ft.ElevatedButton(
+        text="Save Prediction", on_click=save_prediction, icon=ft.Icons.SAVE, disabled=True
+    )
+
+    save_status_icon = ft.Icon(
+        name=ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN, visible=False
+    )
 
     def handle_reorder(e):
         item = team_list.pop(e.old_index)
@@ -138,6 +147,7 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
             bgcolor=ft.Colors.BLUE_50,
             border_radius=6,
             alignment=ft.alignment.center_left,
+            expand=False,
             width=350,
         )
 
@@ -145,6 +155,7 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
         nonlocal team_list
 
         apply_saved_token()
+
         season = "2025/2026"
         league = league.lower().replace(" ", "_")
 
@@ -155,6 +166,7 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
             .eq("league", league)
             .eq("season", season)
         )
+
         prediction_res = safe_execute(
             prediction_query, f"load_teams prediction SELECT for {user_id}, {league}"
         )
@@ -163,6 +175,7 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
         if records and records[0]["rankings"]:
             saved_order_ids = records[0]["rankings"]
             team_list = []
+
             for team_id in saved_order_ids:
                 team_query = (
                     supabase.table("teams").select("*").eq("id", team_id).maybe_single()
@@ -178,16 +191,17 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
                 .eq("season", season)
                 .order("sort_order")
             )
-            fallback_res = safe_execute(fallback_query, f"load_teams fallback {league}")
+            fallback_res = safe_execute(fallback_query, f"load_teams fallback for {league}")
             team_list = fallback_res.data if fallback_res else []
 
         list_view.controls.clear()
         for i, team in enumerate(team_list):
             list_view.controls.append(team_container(team, i + 1))
 
+        page.update()
+
         last_saved_ids.clear()
         last_saved_ids.extend([team["id"] for team in team_list])
-        page.update()
 
     def on_tab_change(e):
         selected_league = e.control.tabs[e.control.selected_index].text
@@ -203,10 +217,16 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
         ],
     )
 
-    # --- Root Layout ---
-    content = ft.Column(
+    # --- Main Layout ---
+    build_view = ft.Column(
         controls=[
             countdown_text,
+            ft.Row(
+                [
+                    ft.Text("EFL 1 to 24s", size=24, weight=ft.FontWeight.BOLD),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
             tabs,
             ft.Container(content=list_view, padding=10, expand=True),
             ft.Row([save_button, save_status_icon], spacing=10),
@@ -215,8 +235,8 @@ def efl_1_to_24s_view(page: ft.Page, user_id: str, on_logout):
         expand=True,
     )
 
-    # --- Startup Tasks ---
+    # --- Initialize view ---
     load_teams("championship")
     page.run_task(update_countdown)
 
-    return content
+    return build_view

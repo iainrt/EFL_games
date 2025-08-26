@@ -7,11 +7,7 @@ SESSION_FILE = Path(".session.json")
 
 
 def try_auto_login(on_success):
-    """
-    Attempt to restore session from saved token.
-    Calls on_success(user_id) if valid, returns True.
-    Returns False otherwise.
-    """
+    """Attempt to restore session from saved token."""
     user_id = apply_saved_token()
     if user_id:
         print(f"✅ Auto-login succeeded: {user_id}")
@@ -30,7 +26,7 @@ def clear_session():
     """Remove local session file and reset PostgREST auth header."""
     SESSION_FILE.unlink(missing_ok=True)
 
-    # Instead of passing None or "", manually clear the Authorization header
+    # Manually clear PostgREST token
     if "Authorization" in supabase.postgrest.headers:
         del supabase.postgrest.headers["Authorization"]
 
@@ -47,7 +43,6 @@ def apply_saved_token() -> str | None:
             access_token = saved.get("access_token")
             refresh_token = saved.get("refresh_token")
 
-            # 🔄 Always run set_session — refreshes if expired
             res = supabase.auth.set_session(access_token, refresh_token)
 
             if res and res.session and res.user:
@@ -63,22 +58,16 @@ def apply_saved_token() -> str | None:
 
 
 def logout_user():
-    """
-    Logs out the current user:
-    - Calls supabase.auth.sign_out()
-    - Clears session.json
-    - Removes PostgREST token
-    """
+    """Logs out the current user and clears local session."""
     try:
         supabase.auth.sign_out()
     except Exception as ex:
         print("⚠️ Error during supabase sign_out:", ex)
-
     clear_session()
     print("👋 User logged out successfully")
 
 
-# --- Authentication helpers used by auth_view ---
+# --- Authentication helpers ---
 def safe_sign_in(email: str, password: str):
     """Safely attempt sign-in, return result or None on failure."""
     try:
@@ -97,3 +86,18 @@ def safe_sign_up(email: str, password: str):
         print(f"❌ safe_sign_up failed for {email}:", ex)
         traceback.print_exc()
         return None
+
+
+def get_current_user():
+    """
+    Always return the freshest authenticated user from Supabase.
+    Returns a User object or None.
+    """
+    try:
+        user = supabase.auth.get_user()
+        if user and user.user:
+            return user.user
+    except Exception as ex:
+        print("❌ get_current_user failed:", ex)
+        traceback.print_exc()
+    return None
