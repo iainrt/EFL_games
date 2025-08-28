@@ -1,6 +1,5 @@
 import flet as ft
-from auth_helpers import save_session_and_auth, safe_sign_in, safe_sign_up
-from supabase_client import supabase
+from auth_helpers import save_session_and_auth, safe_sign_in, safe_sign_up, safe_reset_password
 
 
 def auth_view(page: ft.Page, on_login_success):
@@ -34,22 +33,19 @@ def auth_view(page: ft.Page, on_login_success):
             status_text.color = ft.Colors.RED
         page.update()
 
-    def do_forgot_password(e):
-        if not email_input.value:
-            status_text.value = "⚠️ Please enter your email first."
+    def do_reset_password(e):
+        if not email_input.value.strip():
+            status_text.value = "❌ Please enter your email to reset password."
             status_text.color = ft.Colors.RED
             page.update()
             return
 
-        try:
-            supabase.auth.reset_password_for_email(email_input.value)
-            status_text.value = (
-                f"📩 Password reset link sent to {email_input.value}. "
-                "Check your email."
-            )
+        res = safe_reset_password(email_input.value.strip())
+        if res:
+            status_text.value = "📧 Password reset email sent! Please check your inbox."
             status_text.color = ft.Colors.GREEN
-        except Exception as ex:
-            status_text.value = f"❌ Failed to send reset link: {ex}"
+        else:
+            status_text.value = "❌ Failed to send password reset email."
             status_text.color = ft.Colors.RED
         page.update()
 
@@ -75,8 +71,8 @@ def auth_view(page: ft.Page, on_login_success):
                                 alignment=ft.MainAxisAlignment.CENTER,
                             ),
                             ft.TextButton(
-                                "Forgot Password?",
-                                on_click=do_forgot_password,
+                                "Forgot password?",
+                                on_click=do_reset_password,
                                 style=ft.ButtonStyle(color=ft.Colors.BLUE),
                             ),
                             status_text,

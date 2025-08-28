@@ -47,7 +47,6 @@ def apply_saved_token() -> str | None:
             access_token = saved.get("access_token")
             refresh_token = saved.get("refresh_token")
 
-            # 🔄 Always run set_session — refreshes if expired
             res = supabase.auth.set_session(access_token, refresh_token)
 
             if res and res.session and res.user:
@@ -63,12 +62,7 @@ def apply_saved_token() -> str | None:
 
 
 def logout_user():
-    """
-    Logs out the current user:
-    - Calls supabase.auth.sign_out()
-    - Clears session.json
-    - Removes PostgREST token
-    """
+    """Log out current user and clear session."""
     try:
         supabase.auth.sign_out()
     except Exception as ex:
@@ -78,9 +72,8 @@ def logout_user():
     print("👋 User logged out successfully")
 
 
-# --- Authentication helpers used by auth_view ---
+# --- Authentication helpers ---
 def safe_sign_in(email: str, password: str):
-    """Safely attempt sign-in, return result or None on failure."""
     try:
         return supabase.auth.sign_in_with_password({"email": email, "password": password})
     except Exception as ex:
@@ -90,10 +83,58 @@ def safe_sign_in(email: str, password: str):
 
 
 def safe_sign_up(email: str, password: str):
-    """Safely attempt sign-up, return result or None on failure."""
     try:
         return supabase.auth.sign_up({"email": email, "password": password})
     except Exception as ex:
         print(f"❌ safe_sign_up failed for {email}:", ex)
         traceback.print_exc()
         return None
+    
+# --- Password reset ---
+def safe_reset_password(email: str):
+    """Send a password reset email safely."""
+    try:
+        return supabase.auth.reset_password_for_email(email)
+    except Exception as ex:
+        print(f"❌ safe_reset_password failed for {email}:", ex)
+        traceback.print_exc()
+        return None
+
+
+# --- User info ---
+def get_current_user() -> dict | None:
+    """
+    Returns a dict like:
+    {
+        "id": "...",
+        "email": "...",
+        "user_metadata": {...}
+    }
+    or None if not logged in.
+    """
+    try:
+        # Ensure token is applied / refreshed if needed
+        apply_saved_token()
+
+        res = supabase.auth.get_user()
+        u = getattr(res, "user", None) if res else None
+        if not u:
+            return None
+
+        # Try to access as object, then as dict; normalize to dict
+        try:
+            meta = dict(u.user_metadata or {})
+            uid = getattr(u, "id", None)
+            email = getattr(u, "email", None)
+        except Exception:
+            # Fallback if u is already a dict-like
+            u = dict(u)
+            meta = dict(u.get("user_metadata") or {})
+            uid = u.get("id")
+            email = u.get("email")
+
+        return {"id": uid, "email": email, "user_metadata": meta}
+    except Exception as ex:
+        print("⚠️ get_current_user failed:", ex)
+        return None
+
