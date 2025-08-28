@@ -89,6 +89,16 @@ def safe_sign_up(email: str, password: str):
         print(f"❌ safe_sign_up failed for {email}:", ex)
         traceback.print_exc()
         return None
+    
+# --- Password reset ---
+def safe_reset_password(email: str):
+    """Send a password reset email safely."""
+    try:
+        return supabase.auth.reset_password_for_email(email)
+    except Exception as ex:
+        print(f"❌ safe_reset_password failed for {email}:", ex)
+        traceback.print_exc()
+        return None
 
 
 # --- User info ---

@@ -1,5 +1,5 @@
 import flet as ft
-from auth_helpers import save_session_and_auth, safe_sign_in, safe_sign_up
+from auth_helpers import save_session_and_auth, safe_sign_in, safe_sign_up, safe_reset_password
 
 
 def auth_view(page: ft.Page, on_login_success):
@@ -10,14 +10,10 @@ def auth_view(page: ft.Page, on_login_success):
     def do_login(e):
         res = safe_sign_in(email_input.value, password_input.value)
         if res and res.session and res.user:
-            # Save session + apply token
             save_session_and_auth(res.session)
-
             status_text.value = "✅ Login successful!"
             status_text.color = ft.Colors.GREEN
             page.update()
-
-            # ✅ Just redirect, since get_current_user() will pick up state
             on_login_success(res.user.id)
         else:
             status_text.value = "❌ Login failed. Check credentials or try again."
@@ -26,7 +22,7 @@ def auth_view(page: ft.Page, on_login_success):
 
     def do_signup(e):
         res = safe_sign_up(email_input.value, password_input.value)
-        if res and res.user:
+        if res and res.session:
             save_session_and_auth(res.session)
             status_text.value = (
                 "✅ Signup successful! Please check your email to confirm your account."
@@ -37,7 +33,22 @@ def auth_view(page: ft.Page, on_login_success):
             status_text.color = ft.Colors.RED
         page.update()
 
-    # ✅ Wrap in a Card for consistent styling
+    def do_reset_password(e):
+        if not email_input.value.strip():
+            status_text.value = "❌ Please enter your email to reset password."
+            status_text.color = ft.Colors.RED
+            page.update()
+            return
+
+        res = safe_reset_password(email_input.value.strip())
+        if res:
+            status_text.value = "📧 Password reset email sent! Please check your inbox."
+            status_text.color = ft.Colors.GREEN
+        else:
+            status_text.value = "❌ Failed to send password reset email."
+            status_text.color = ft.Colors.RED
+        page.update()
+
     return ft.Row(
         [
             ft.Card(
@@ -58,6 +69,11 @@ def auth_view(page: ft.Page, on_login_success):
                                     ft.TextButton("Sign Up", on_click=do_signup),
                                 ],
                                 alignment=ft.MainAxisAlignment.CENTER,
+                            ),
+                            ft.TextButton(
+                                "Forgot password?",
+                                on_click=do_reset_password,
+                                style=ft.ButtonStyle(color=ft.Colors.BLUE),
                             ),
                             status_text,
                         ],
