@@ -16,19 +16,17 @@ def main(page: ft.Page):
 
     # --- AppBar Navigation ---
     def build_appbar():
-        """Build dynamic navigation bar with Material buttons."""
+        """Build dynamic navigation bar inside an AppBar with Material buttons."""
         user = get_current_user()
+
         actions = [ft.ElevatedButton("Home", on_click=lambda e: page.go("/"))]
 
         if user:
-            # Use display_name if available, fallback to email
-            display_name = (
-                user.user_metadata.get("display_name")
-                if user.user_metadata and user.user_metadata.get("display_name")
-                else user.email
+            display_name = user["user_metadata"].get("display_name") or user["email"]
+            actions.append(
+                ft.ElevatedButton(display_name, on_click=lambda e: page.go("/profile"))
             )
             actions.append(ft.ElevatedButton("1to24s", on_click=lambda e: page.go("/1to24s")))
-            actions.append(ft.ElevatedButton(display_name, on_click=lambda e: page.go("/profile")))
             actions.append(ft.ElevatedButton("Logout", on_click=lambda e: handle_logout()))
         else:
             actions.append(ft.ElevatedButton("Login", on_click=lambda e: page.go("/login")))
@@ -149,16 +147,18 @@ def main(page: ft.Page):
                 page.go("/login")
                 return
 
-            # Render the actual game view
-            game_view = efl_1_to_24s_view(page, user_id=user_id, on_logout=handle_logout)
+            content_view = efl_1_to_24s_view(page, user_id=user_id, on_logout=handle_logout)
 
             page.views.append(
                 ft.View(
                     "/1to24s",
                     controls=[
                         ft.Container(
-                            content=game_view,
-                            alignment=ft.alignment.top_center,
+                            content=ft.Card(
+                                content=ft.Container(content=content_view, padding=30),
+                                elevation=8,
+                            ),
+                            alignment=ft.alignment.center,
                             expand=True,
                         )
                     ],
@@ -167,12 +167,6 @@ def main(page: ft.Page):
             )
 
         elif page.route == "/profile":
-            # Profile page (only when logged in)
-            user = get_current_user()
-            if not user:
-                page.go("/login")
-                return
-
             page.views.append(
                 ft.View(
                     "/profile",
@@ -180,15 +174,12 @@ def main(page: ft.Page):
                         ft.Container(
                             content=ft.Card(
                                 content=ft.Container(
-                                    content=profile_view(
-                                        page,
-                                        on_profile_updated=lambda: page.go("/profile"),
-                                    ),
+                                    content=profile_view(page, refresh_nav=lambda: page.go(page.route)),
                                     padding=30,
                                 ),
                                 elevation=8,
                             ),
-                            alignment=ft.alignment.top_center,
+                            alignment=ft.alignment.center,
                             expand=True,
                         )
                     ],

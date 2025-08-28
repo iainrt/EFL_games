@@ -7,7 +7,11 @@ SESSION_FILE = Path(".session.json")
 
 
 def try_auto_login(on_success):
-    """Attempt to restore session from saved token."""
+    """
+    Attempt to restore session from saved token.
+    Calls on_success(user_id) if valid, returns True.
+    Returns False otherwise.
+    """
     user_id = apply_saved_token()
     if user_id:
         print(f"✅ Auto-login succeeded: {user_id}")
@@ -26,7 +30,7 @@ def clear_session():
     """Remove local session file and reset PostgREST auth header."""
     SESSION_FILE.unlink(missing_ok=True)
 
-    # Manually clear PostgREST token
+    # Instead of passing None or "", manually clear the Authorization header
     if "Authorization" in supabase.postgrest.headers:
         del supabase.postgrest.headers["Authorization"]
 
@@ -58,18 +62,18 @@ def apply_saved_token() -> str | None:
 
 
 def logout_user():
-    """Logs out the current user and clears local session."""
+    """Log out current user and clear session."""
     try:
         supabase.auth.sign_out()
     except Exception as ex:
         print("⚠️ Error during supabase sign_out:", ex)
+
     clear_session()
     print("👋 User logged out successfully")
 
 
 # --- Authentication helpers ---
 def safe_sign_in(email: str, password: str):
-    """Safely attempt sign-in, return result or None on failure."""
     try:
         return supabase.auth.sign_in_with_password({"email": email, "password": password})
     except Exception as ex:
@@ -79,7 +83,6 @@ def safe_sign_in(email: str, password: str):
 
 
 def safe_sign_up(email: str, password: str):
-    """Safely attempt sign-up, return result or None on failure."""
     try:
         return supabase.auth.sign_up({"email": email, "password": password})
     except Exception as ex:
@@ -88,16 +91,40 @@ def safe_sign_up(email: str, password: str):
         return None
 
 
-def get_current_user():
+# --- User info ---
+def get_current_user() -> dict | None:
     """
-    Always return the freshest authenticated user from Supabase.
-    Returns a User object or None.
+    Returns a dict like:
+    {
+        "id": "...",
+        "email": "...",
+        "user_metadata": {...}
+    }
+    or None if not logged in.
     """
     try:
-        user = supabase.auth.get_user()
-        if user and user.user:
-            return user.user
+        # Ensure token is applied / refreshed if needed
+        apply_saved_token()
+
+        res = supabase.auth.get_user()
+        u = getattr(res, "user", None) if res else None
+        if not u:
+            return None
+
+        # Try to access as object, then as dict; normalize to dict
+        try:
+            meta = dict(u.user_metadata or {})
+            uid = getattr(u, "id", None)
+            email = getattr(u, "email", None)
+        except Exception:
+            # Fallback if u is already a dict-like
+            u = dict(u)
+            meta = dict(u.get("user_metadata") or {})
+            uid = u.get("id")
+            email = u.get("email")
+
+        return {"id": uid, "email": email, "user_metadata": meta}
     except Exception as ex:
-        print("❌ get_current_user failed:", ex)
-        traceback.print_exc()
-    return None
+        print("⚠️ get_current_user failed:", ex)
+        return None
+
